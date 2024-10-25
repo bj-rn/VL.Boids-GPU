@@ -1,0 +1,8 @@
+shader ParticleBuffer: ParticleStruct
+{
+    rgroup PerMaterial
+    {
+        stage StructuredBuffer<Particle> Particles;
+    }
+    
+};

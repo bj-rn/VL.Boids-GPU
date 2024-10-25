@@ -1,31 +1,24 @@
 //Boids Simulation
 //original from : Indie Visual Lab
 //https://github.com/IndieVisualLab/UnityGraphicsProgrammingSeries
-shader Boids_ComputeFX : ComputeShaderBase, BoidsData, Global //Time and Timestep
+shader Boids_ComputeFX : ComputeShaderBase, ParticleBufferRW, Global //Time and Timestep
 {
-    struct Matrix
-    {
-        float4x4 m;
-    };
-
-    //we cannot use Buffer<float4x4>...... 
-    RWStructuredBuffer<Matrix> Matricies;
-    RWStructuredBuffer<Matrix> InverseMatricies;
 
     float3 WallCenter;
     float3 WallSize;
-    float WallForceStlength = .5;
+    float WallForceStrength = .5;
 
     float SeparationRadius = .5;
     float AlignRadius = .5;
     float CohesionRadius = .25;
 
-    float SeparationStlength = 1.5;
-    float AlignStlength = 1.2;
-    float CohesionStlength = 2.5;
+    float SeparationStrength = 1.5;
+    float AlignStrength = 1.2;
+    float CohesionStrength = 2.5;
 
     float maxVelocity = 1.0;
     float maxForce = .2;
+
 
     float3 limit(float3 v, float m)
     {
@@ -33,7 +26,7 @@ shader Boids_ComputeFX : ComputeShaderBase, BoidsData, Global //Time and Timeste
 	    return lerp(v * (m / l), v, step(l, m));
     }
 
-    groupshared Attributes GroupData[ThreadNumberX];
+    groupshared Particle GroupData[ThreadNumberX];
 
     override void Compute()
     {
@@ -41,7 +34,7 @@ shader Boids_ComputeFX : ComputeShaderBase, BoidsData, Global //Time and Timeste
         uint gtid = streams.GroupThreadId.x;
 
         //prev frame data
-        Attributes v = Data[dtid];
+        Particle v = Particles[dtid];
 
         float3 separation = 0;
         int scnt = 0;
@@ -55,18 +48,18 @@ shader Boids_ComputeFX : ComputeShaderBase, BoidsData, Global //Time and Timeste
             gi += ThreadNumberX)
         {
             //setup shared array data per thread group
-            Attributes d;
-            d.position = Data[gi + gtid].position;
-            d.velocity = Data[gi + gtid].velocity;
+            Particle d;
+            d.Position = Particles[gi + gtid].Position;
+            d.Velocity = Particles[gi + gtid].Velocity;
             GroupData[gtid] = d;
             GroupMemoryBarrierWithGroupSync();
             
             for(uint i = 0; i < ThreadNumberX; i++){
                 
-                float3 fpos = GroupData[i].position;
-                float3 fvel = GroupData[i].velocity;
+                float3 fpos = GroupData[i].Position;
+                float3 fvel = GroupData[i].Velocity;
                 
-                float3 dir = v.position - fpos;
+                float3 dir = v.Position - fpos;
                 float dist = sqrt(dot(dir, dir));
                 
                 //separation
@@ -95,42 +88,42 @@ shader Boids_ComputeFX : ComputeShaderBase, BoidsData, Global //Time and Timeste
         {
             separation /= (float)scnt;
             separation = normalize(separation) * maxVelocity;
-            separation -= v.velocity;
+            separation -= v.Velocity;
             separation = limit(separation, maxForce);
         }
         if(acnt >= 1)
         {
             align /= (float)acnt;
             align = normalize(align) * maxVelocity;
-            align -= v.velocity;
+            align -= v.Velocity;
             align = limit(align, maxForce);
         }
         if(ccnt >= 1)
         {
             cohesion /= (float)ccnt;
-            cohesion -= v.position;
+            cohesion -= v.Position;
             cohesion = normalize(cohesion) * maxVelocity;
-            cohesion -= v.velocity;
+            cohesion -= v.Velocity;
             cohesion = limit(cohesion, maxForce);
         }
 
         float3 force = 0;
-        force += separation * SeparationStlength;
-        force += align * AlignStlength;
-        force += cohesion * CohesionStlength;
+        force += separation * SeparationStrength;
+        force += align * AlignStrength;
+        force += cohesion * CohesionStrength;
 
         //wall collision
-        float3 wallV = v.position - WallCenter;
+        float3 wallV = v.Position - WallCenter;
         float3 wallForce = 0;
         wallForce.x = lerp(sign(-wallV.x), 0, step(abs(wallV.x), (WallSize.x / 2)));
         wallForce.y = lerp(sign(-wallV.y), 0, step(abs(wallV.y), (WallSize.y / 2)));
         wallForce.z = lerp(sign(-wallV.z), 0, step(abs(wallV.z), (WallSize.z / 2)));
 
-        force += wallForce * WallForceStlength;
+        force += wallForce * WallForceStrength;
 
-        //update attributes
-        float3 velocity = v.velocity + force * TimeStep;
-        float3 position = v.position + velocity * TimeStep;
+        //update Particle
+        float3 velocity = v.Velocity + force * TimeStep;
+        float3 position = v.Position + velocity * TimeStep;
 
         //setup output matrix
         float3 zDir = normalize(velocity);
@@ -138,22 +131,12 @@ shader Boids_ComputeFX : ComputeShaderBase, BoidsData, Global //Time and Timeste
         float3 yDir = normalize(cross(xDir, zDir));
         xDir = normalize(cross(yDir, zDir));
 
-        float4x4 rotation = float4x4(float4(xDir, 0),
-                                    float4(yDir, 0),
-                                    float4(zDir, 0),
-                                    float4(0, 0, 0, 1));
+        v.Position = position;
+        v.Velocity = velocity;
+        v.AxisX = xDir;
+        v.AxisY = yDir;
+        v.AxisZ = zDir;
 
-        Matrix m;
-        m.m = rotation;
-        m.m._41_42_43 = position;
-        Matricies[dtid] = m;
-
-        // inverse rotation matrix, needed when the material uses normal map
-        m.m = transpose(rotation);
-        InverseMatricies[dtid] = m;
-
-        v.position = position;
-        v.velocity = velocity;
-        Data[dtid] = v;
+        Particles[dtid] = v;
     }
 };

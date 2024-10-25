@@ -1,0 +1,4 @@
+shader ParticleBufferRW:  ParticleStruct
+{
+    RWStructuredBuffer<Particle> Particles;
+};

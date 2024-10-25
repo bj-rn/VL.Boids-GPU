@@ -1,5 +1,6 @@
-shader InitBoids_ComputeFX : ComputeShaderBase, BoidsData, HappyNoise
+shader InitBoids_ComputeFX : ComputeShaderBase, ParticleBufferRW, HappyNoise
 {
+
     override void Compute()
     {
         uint dtid = streams.DispatchThreadId.x;
@@ -7,9 +8,9 @@ shader InitBoids_ComputeFX : ComputeShaderBase, BoidsData, HappyNoise
         float3 pos = perlinDFV(dtid.xxx * float3(.01, .2, .01));
         float3 vel = normalize(simplexDFV(pos * .5));
 
-        Attributes initial = (Attributes)0;
-        initial.position = pos;
-        initial.velocity = vel;
-        Data[dtid] = initial;
+        Particle initial = (Particle)0;
+        initial.Position = pos;
+        initial.Velocity = vel;
+        Particles[dtid] = initial;
     }
 };

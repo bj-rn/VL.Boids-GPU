@@ -1,0 +1,16 @@
+shader ParticleStruct
+{
+
+    struct Particle
+    {
+        float3 Position;
+        float3 Velocity;
+        float3 AxisX;
+        float3 AxisY;
+        float3 AxisZ;
+        float3 Size3;
+
+        float2 pad; //128-bit (float4) aligned data, see: https://developer.nvidia.com/content/understanding-structured-buffer-performance
+    };
+
+};
